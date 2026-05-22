@@ -1,9 +1,23 @@
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 const { createCanvas } = require("canvas");
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = require("pdfjs-dist/legacy/build/pdf.worker.js");
+let pdfjsLibPromise;
+
+async function getPdfJs() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import("pdfjs-dist/legacy/build/pdf.mjs").then((module) => {
+      const pdfjsLib = module;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = require.resolve(
+        "pdfjs-dist/legacy/build/pdf.worker.mjs"
+      );
+      return pdfjsLib;
+    });
+  }
+
+  return pdfjsLibPromise;
+}
 
 async function renderPdfPagesToPng(buffer, maxPages) {
+  const pdfjsLib = await getPdfJs();
   const loadingTask = pdfjsLib.getDocument({ data: buffer });
   const pdf = await loadingTask.promise;
   const totalPages = pdf.numPages;

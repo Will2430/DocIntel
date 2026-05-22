@@ -1,26 +1,56 @@
-
 services:
   redis:
-    image: "redis"
+    image: redis
     container_name: redis-server
     ports:
       - "6379:6379"
-    volumes: 
+    volumes:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
 
   postgres:
-    image: "pgvector/pgvector:pg15"
+    image: pgvector/pgvector:pg15
     container_name: postgres-db
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "password"
-      POSTGRES_DB: "mydb"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydb
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-server
+    ports:
+      - "8082:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  text-embedding-service:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    container_name: text-embedding-service
+    ports:
+      - "8081:80"
+    environment:
+      MODEL_ID: BAAI/bge-small-en-v1.5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   redis-data:
   postgres-data:
+  ollama-data:

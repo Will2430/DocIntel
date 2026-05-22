@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export default function Dashboard({
   apiBase,
@@ -15,8 +15,28 @@ export default function Dashboard({
   const [answer, setAnswer] = useState("");
   const [citations, setCitations] = useState([]);
   const [error, setError] = useState("");
+  const [jobId, setJobId] = useState("");
+  const [askStatus, setAskStatus] = useState("idle");
+  const eventSourceRef = useRef(null);
+  const streamActiveRef = useRef(false);
 
   const docIdInput = useMemo(() => docIds.join(","), [docIds]);
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
+
+  function closeStream() {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    streamActiveRef.current = false;
+  }
 
   async function handleUpload() {
     if (!selectedFile) {
@@ -77,6 +97,9 @@ export default function Dashboard({
     setError("");
     setAnswer("");
     setCitations([]);
+    setAskStatus("queued");
+
+    closeStream();
 
     const res = await fetch(`${apiBase}/questions`, {
       method: "POST",
@@ -84,6 +107,7 @@ export default function Dashboard({
         "Content-Type": "application/json",
         "x-tenant-id": tenantId
       },
+      credentials: "include",
       body: JSON.stringify({ question, documentIds: docIds })
     });
 
@@ -93,8 +117,53 @@ export default function Dashboard({
     }
 
     const data = await res.json();
-    setAnswer(data.answer || "");
-    setCitations(data.citations || []);
+    if (!data.jobId) {
+      setError("Job ID missing from response.");
+      setAskStatus("idle");
+      return;
+    }
+
+    setJobId(data.jobId);
+    setAskStatus("streaming");
+    streamActiveRef.current = true;
+
+    const streamUrl = `${apiBase}/questions/${data.jobId}/stream`;
+    const eventSource = new EventSource(streamUrl, { withCredentials: true });
+    eventSourceRef.current = eventSource;
+
+    eventSource.addEventListener("status", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.status) {
+          setAskStatus(payload.status);
+        }
+      } catch (err) {
+        // Ignore malformed status messages.
+      }
+    });
+
+    eventSource.addEventListener("done", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        setAnswer(payload.answer || "");
+        setCitations(payload.citations || []);
+      } catch (err) {
+        setError("Failed to parse completion payload.");
+      }
+
+      setAskStatus("done");
+      closeStream();
+    });
+
+    eventSource.addEventListener("error", () => {
+      if (!streamActiveRef.current) {
+        return;
+      }
+
+      setError("Stream disconnected. Try asking again.");
+      setAskStatus("idle");
+      closeStream();
+    });
   }
 
   function handleDocIdsChange(event) {
@@ -180,6 +249,10 @@ export default function Dashboard({
           <button type="button" onClick={handleAsk} className="primary">
             Ask
           </button>
+
+          {jobId && (
+            <p className="muted">Job ID: {jobId} · Status: {askStatus}</p>
+          )}
 
           {error && <p className="error">{error}</p>}
         </section>

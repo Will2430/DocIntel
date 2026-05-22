@@ -5,6 +5,7 @@ const redis = new Redis(config.redisUrl);
 const pub = new Redis(config.redisUrl);
 const sub = new Redis(config.redisUrl);
 
+// Redis keys for diffrent state and data management of the question-answering jobs
 function jobKey(jobId) {
   return `job:${jobId}`;
 }

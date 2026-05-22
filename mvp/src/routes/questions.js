@@ -27,7 +27,8 @@ router.post("/", async (req, res) => {
 
   await redis.set(jobMetaKey(jobId), JSON.stringify(meta), "EX", JOB_TTL_SECONDS);
   await redis.set(jobStatusKey(jobId), "queued", "EX", JOB_TTL_SECONDS);
-
+  
+  // Enqueue the job for processing by the worker
   await answerQueue.add({ jobId, ...meta });
 
   return res.json({ jobId, status: "queued" });
@@ -62,6 +63,7 @@ router.get("/:jobId/stream", async (req, res) => {
 
   res.write(`event: job\ndata: ${JSON.stringify({ jobId })}\n\n`);
 
+  // Persistence check in case client connects after job is done
   const status = await redis.get(jobStatusKey(jobId));
   if (status === "done") {
     const resultRaw = await redis.get(jobResultKey(jobId));
@@ -70,7 +72,9 @@ router.get("/:jobId/stream", async (req, res) => {
     }
     return res.end();
   }
-
+  // duplicate a isolated redis connection for subscription due to sub/pub behaviour,
+  // where after a subscription is made, the connection cannot be used for other commands
+  // as it is dedicated to listening to messages from the subscribed channel
   const subscriber = sub.duplicate();
   const channel = jobKey(jobId);
 
@@ -78,6 +82,7 @@ router.get("/:jobId/stream", async (req, res) => {
     res.write(": ping\n\n");
   }, 15000);
 
+  // Listen and propagate messages from the worker via Redis Pub/Sub
   const onMessage = (channelName, message) => {
     let payload;
     try {
