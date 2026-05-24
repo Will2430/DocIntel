@@ -1,6 +1,6 @@
 # Financial Document Intelligence Platform (MVP)
 
-Upload financial PDFs, run OCR, ask questions, and get cited answers. This repository contains an MVP implementation plus an implementation plan.
+Upload financial PDFs, run OCR, ask questions, and get cited answers. This is a mvp with implementations mostly for learning purposes
 
 ## Features
 
@@ -10,6 +10,18 @@ Upload financial PDFs, run OCR, ask questions, and get cited answers. This repos
 - SSE streaming of answers (token-by-token)
 - Postgres + pgvector for embeddings
 - Google OAuth (JWT cookie)
+
+## Technology Stack
+
+### Frontend
+- React + Vite
+
+### Backend
+- Node.js + Express
+
+### Queue and Database
+- Redis(BullMQ) + Postgres & PGvector
+
 
 ## Repository Structure
 
@@ -85,6 +97,12 @@ See [mvp/.env.example](mvp/.env.example) for the full list. Important ones:
 - `LLM_MODEL`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`
 
+## Google OAuth and JWT token Signing
+
+- Utilizes google passport and strategies for authentification. After successful auth, the backend issues a signed JWT containing user identity claims
+- The signed token is then passed along any subsequent API calls
+- Secure cookie configuration and SameSite policies help mitigate CSRF attacks.
+
 ## LLM + Embeddings
 
 - Embeddings are provided by TEI (`/embed`) and stored in pgvector.
@@ -112,6 +130,3 @@ From [mvp/package.json](mvp/package.json):
 - `npm run worker:qa` — QA worker
 - `npm run migrate` — database migrations
 
-## License
-
-MIT
