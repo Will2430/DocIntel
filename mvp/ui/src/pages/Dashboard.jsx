@@ -19,6 +19,7 @@ export default function Dashboard({
   const [askStatus, setAskStatus] = useState("idle");
   const eventSourceRef = useRef(null);
   const streamActiveRef = useRef(false);
+  const doneRef = useRef(false);
 
   const docIdInput = useMemo(() => docIds.join(","), [docIds]);
 
@@ -126,6 +127,7 @@ export default function Dashboard({
     setJobId(data.jobId);
     setAskStatus("streaming");
     streamActiveRef.current = true;
+    doneRef.current = false;
 
     const streamUrl = `${apiBase}/questions/${data.jobId}/stream`;
     const eventSource = new EventSource(streamUrl, { withCredentials: true });
@@ -142,20 +144,47 @@ export default function Dashboard({
       }
     });
 
+    // done here referes to the event type that is publish in the pub channel when 
+    // the worker finishes processing the question, this is different from the status updates that are also sent by the worker
+    
+    // this handler is for setAns is the final authoritative state update for the answer and citations, 
+    // as it is triggered by the "done" event which indicates that the worker has completed processing and has sent the final result, 
+    // while the incremental tokens are just intermediate updates that may not represent the complete or final answer
     eventSource.addEventListener("done", (event) => {
       try {
         const payload = JSON.parse(event.data);
-        setAnswer(payload.answer || "");
+        if (payload.answer) {
+          setAnswer(payload.answer);
+        }
         setCitations(payload.citations || []);
       } catch (err) {
         setError("Failed to parse completion payload.");
       }
 
       setAskStatus("done");
+      doneRef.current = true;
       closeStream();
     });
 
+    // this is the message handler responsible for handling the incremental tokens sent by the worker
+    eventSource.onmessage = (event) => {
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch (err) {
+        setAnswer((prev) => `${prev}${event.data}`);
+        return;
+      }
+
+      if (payload.type === "token" && payload.token) {
+        setAnswer((prev) => `${prev}${payload.token}`);
+      }
+    };
+
     eventSource.addEventListener("error", () => {
+      if (doneRef.current) {
+        return;
+      }
       if (!streamActiveRef.current) {
         return;
       }

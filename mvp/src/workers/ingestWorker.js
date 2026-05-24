@@ -2,6 +2,7 @@ const { config } = require("../config");
 const { getObject } = require("../storage/index");
 const { pool } = require("../db");
 const { embedText } = require("../rag/embedder");
+const pgvector = require("pgvector");
 const { v4: uuidv4 } = require("uuid");
 const { getQueue } = require("../queue");
 const { extractChunksFromPdf } = require("../ocr/ocrPipeline");
@@ -14,6 +15,8 @@ async function handleIngest(job) {
   if (!tenantId || !docId) {
     return;
   }
+
+  console.log("Ingest worker start", { docId, tenantId, textOverride: Boolean(textOverride) });
 
   let chunks = [];
 
@@ -35,6 +38,7 @@ async function handleIngest(job) {
 
   for (const chunk of chunks) {
     const embedding = await embedText(chunk.text);
+    const embeddingVector = pgvector.toSql(embedding);
     const chunkId = uuidv4();
 
     await pool.query(
@@ -46,20 +50,25 @@ async function handleIngest(job) {
         chunk.pageNumber,
         JSON.stringify(chunk.bbox),
         chunk.text,
-        embedding
+        embeddingVector
       ]
     );
   }
 
   await pool.query("UPDATE documents SET status = $1 WHERE id = $2", ["indexed", docId]);
+  console.log("Ingest worker done", { docId });
 }
 async function runRedis() {
   const { Worker } = require("bullmq");
-  new Worker(
+  const worker = new Worker(
     "ingest_document",
     async (job) => handleIngest(job),
     { connection: { url: config.redisUrl } }
   );
+
+  worker.on("failed", (job, err) => {
+    console.error("Ingest worker failed", { jobId: job && job.id, error: err.message });
+  });
 }
 
 async function runSqs() {

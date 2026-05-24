@@ -1,6 +1,6 @@
 const { config } = require("../config");
 const { retrieveChunks } = require("../rag/retriever");
-const { answerWithContext } = require("../rag/answerer");
+const { answerWithContext, streamAnswerWithContext } = require("../rag/answerer");
 const { buildCitations } = require("../rag/citations");
 const { pool } = require("../db");
 const { v4: uuidv4 } = require("uuid");
@@ -22,6 +22,8 @@ async function handleQuestion(job) {
     return;
   }
 
+  console.log("QA worker start", { jobId, tenantId, docs: documentIds.length });
+
   try {
     await redis.set(jobStatusKey(jobId), "running", "EX", 3600);
     await pub.publish(jobKey(jobId), JSON.stringify({ type: "status", status: "running" }));
@@ -33,8 +35,20 @@ async function handleQuestion(job) {
       topK: 6
     });
 
-    const answer = await answerWithContext({ question, chunks });
+    let answer = "";
+    answer = await streamAnswerWithContext({
+      question,
+      chunks,
+      onToken: (token) => {
+        pub.publish(jobKey(jobId), JSON.stringify({ type: "token", token }));
+      }
+    });
+    if (!answer) {
+      answer = await answerWithContext({ question, chunks });
+    }
     const citations = buildCitations(chunks);
+
+    console.log("QA worker got answer", { jobId, answer, citations: citations.length });
 
     const queryId = uuidv4();
     await pool.query(
@@ -46,19 +60,25 @@ async function handleQuestion(job) {
     await redis.set(jobResultKey(jobId), JSON.stringify(result), "EX", 3600);
     await redis.set(jobStatusKey(jobId), "done", "EX", 3600);
     await pub.publish(jobKey(jobId), JSON.stringify({ type: "done", ...result }));
+    console.log("QA worker done", { jobId });
   } catch (err) {
     await redis.set(jobStatusKey(jobId), "error", "EX", 3600);
     await pub.publish(jobKey(jobId), JSON.stringify({ type: "error", message: err.message }));
+    console.error("QA worker failed", { jobId, error: err.message });
   }
 }
 
 async function runRedis() {
   const { Worker } = require("bullmq");
-  new Worker(
+  const worker = new Worker(
     "answer_question",
     async (job) => handleQuestion(job),
     { connection: { url: config.redisUrl } }
   );
+
+  worker.on("failed", (job, err) => {
+    console.error("QA worker failed", { jobId: job && job.id, error: err.message });
+  });
 }
 
 async function runSqs() {

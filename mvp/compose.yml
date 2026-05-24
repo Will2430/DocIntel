@@ -41,7 +41,7 @@ services:
     ports:
       - "8081:80"
     environment:
-      MODEL_ID: BAAI/bge-small-en-v1.5
+      MODEL_ID: BAAI/bge-base-en-v1.5
     deploy:
       resources:
         reservations:

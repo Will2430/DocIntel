@@ -8,15 +8,30 @@ async function embedText(text) {
   const res = await fetch(config.modelEmbeddingsUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input: text })
+    body: JSON.stringify({ inputs: text })
   });
 
   if (!res.ok) {
-    throw new Error(`Embedding request failed: ${res.status}`);
+    const errorText = await res.text();
+    throw new Error(`Embedding request failed: ${res.status} ${errorText}`);
   }
 
   const data = await res.json();
-  return data.embedding;
+  let embedding;
+
+  if (Array.isArray(data)) {
+    embedding = Array.isArray(data[0]) ? data[0] : data;
+  } else if (data.embedding) {
+    embedding = data.embedding;
+  } else if (Array.isArray(data.embeddings) && Array.isArray(data.embeddings[0])) {
+    embedding = data.embeddings[0];
+  }
+
+  if (!embedding) {
+    throw new Error("Embedding response format not recognized");
+  }
+  // Ensure all values are numbers (e.g., convert from strings if necessary)
+  return embedding.map((value) => Number(value));
 }
 
 module.exports = { embedText };

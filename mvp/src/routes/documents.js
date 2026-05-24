@@ -30,9 +30,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   );
 
   if (textOverride) {
-    await ingestQueue.add({ tenantId, docId, textOverride });
+    const job = await ingestQueue.add({ tenantId, docId, textOverride });
+    console.log("Enqueued ingest job", { docId, jobId: job && job.id, textOverride: true });
   } else {
-    await ingestQueue.add({ tenantId, docId });
+    const job = await ingestQueue.add({ tenantId, docId });
+    console.log("Enqueued ingest job", { docId, jobId: job && job.id, textOverride: false });
   }
 
   return res.json({ id: docId, status: "queued" });

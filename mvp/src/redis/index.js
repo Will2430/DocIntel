@@ -5,7 +5,25 @@ const redis = new Redis(config.redisUrl);
 const pub = new Redis(config.redisUrl);
 const sub = new Redis(config.redisUrl);
 
-// Redis keys for diffrent state and data management of the question-answering jobs
+redis.on("error", (err) => {
+  console.error("Redis error:", err);
+});
+
+redis.on("connect", () => {
+  console.log("Connected to Redis");
+});
+
+pub.on("error", (err) => {
+  console.error("Redis pub error:", err);
+});
+
+sub.on("error", (err) => {
+  console.error("Redis sub error:", err);
+});
+
+// Helper functions to generate Redis keys for job management
+
+// Redis keys for different state and data management of the question-answering jobs
 function jobKey(jobId) {
   return `job:${jobId}`;
 }
