@@ -61,7 +61,8 @@ int main(){
 }
 */
 
-#include <cassert>
+
+/*#include <cassert>
 
 void fizzBuss(int count){
 	static const ::vector divisors {3, 5, 7, 11 ,13, 17, 19};
@@ -89,4 +90,26 @@ void fizzBuss(int count){
 int main(){
 	fizzBuss(10);
 	return 0;
+}
+
+*/
+
+template<typename T>
+void printArray(const ::vector<T>& arr){
+
+	for(::size_t index {0}; index < arr.size(); ++index){
+		cout << arr[index] << " ";
+	}
+
+	if (arr.size() > 0){
+		cout << '\n';
+	}
+}
+
+int main(){
+	::vector arr{ 4, 6, 7, 3, 8, 2, 1, 9 };
+
+    printArray(arr); // use function template to print array
+
+    return 0;
 }
