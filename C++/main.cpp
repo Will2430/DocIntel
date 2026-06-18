@@ -94,7 +94,7 @@ int main(){
 
 */
 
-template<typename T>
+/*template<typename T>
 void printArray(const ::vector<T>& arr){
 
 	for(::size_t index {0}; index < arr.size(); ++index){
@@ -112,4 +112,21 @@ int main(){
     printArray(arr); // use function template to print array
 
     return 0;
+}
+
+*/
+
+#include "Point3d.h"
+#include "Vector3d.h"
+
+int main(){
+	Vector v {2.0, 5.0, 4.0};
+	Point p {1.0, 3.0, 6.0};
+
+	p.print();
+	p.moveByVector(v);
+	p.print();
+
+	return 0;
+
 }
